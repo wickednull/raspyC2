@@ -44,8 +44,8 @@ The server consists of the backend API and the GUI control panel.
 **Installation:**
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/wickednull/raspyC2.git
-    cd raspyC2
+    git clone https://github.com/wickednull/raspyC2
+    cd RaspyjackC2
     ```
 2.  **Create and activate a virtual environment:**
     ```bash
@@ -57,17 +57,12 @@ The server consists of the backend API and the GUI control panel.
     pip install -r requirements.txt
     ```
 
-**Running the Server:**
-The server requires two processes to be running in separate terminals.
-
-- **Terminal 1: Run the Backend API:**
+**Running the Application:**
+The entire application (backend API and GUI) can be started with a single command:
   ```bash
-  python -m uvicorn c2_server.main:app --reload
+  python raspyC2.py
   ```
-- **Terminal 2: Run the GUI Control Panel:**
-  ```bash
-  python gui_app.py
-  ```
+This will launch the FastAPI backend in a separate process and then open the GUI control panel. When you close the GUI, the backend server will automatically shut down.
 
 ### 2. Client Setup (on the Raspyjack)
 
@@ -76,28 +71,41 @@ Deploy the client to your Raspyjack device.
 **Prerequisites:**
 - Python 3
 - `pip` for Python 3
+- `requests` library (and optionally `Pillow` and `pyscreenshot` for screen capture functionality)
 
 **Installation:**
-1.  **Transfer the `c2_client` directory** to your Raspyjack's home directory (`/home/pi`). You can use `scp` for this.
-
-2.  **SSH into your Raspyjack** and install the required dependency:
+1.  **Transfer the entire `RaspyjackC2` project directory** to your Raspyjack. For the systemd service to function correctly, it is recommended to place it in `/root/Raspyjack`.
+    ```bash
+    # Example using scp from your computer
+    scp -r /path/to/RaspyjackC2 pi@<your-raspyjack-ip>:/root/Raspyjack
+    ```
+2.  **SSH into your Raspyjack** and install the required dependencies:
     ```bash
     ssh pi@<your-raspyjack-ip>
-    pip3 install requests
+    # Navigate to the client directory
+    cd /root/Raspyjack
+    pip3 install requests Pillow pyscreenshot
+    ```
+3.  **Install as a Systemd Service (Recommended for Production):**
+    This will set up the client to run automatically on boot and restart if it crashes.
+    ```bash
+    sudo python3 c2_client/client.py install --c2-url http://<your-server-ip>:8000
+    ```
+    Replace `<your-server-ip>` with the local IP address of the computer running the C2 server.
+    
+    After installation, you can check the service status and logs:
+    ```bash
+    sudo systemctl status raspyjack-client
+    journalctl -u raspyjack-client -f
     ```
 
-3.  **Configure the Client:**
-    - On the Raspyjack, open the client script for editing: `nano c2_client/client.py`
-    - Find the line: `C2_URL = "http://127.0.0.1:8000/api"`
-    - Change `127.0.0.1` to the **local IP address of the computer running the server**.
-    - Save the file (`Ctrl+X`, `Y`, `Enter`).
-
-**Running the Client:**
-- From your Raspyjack's terminal, run the client:
+**Running the Client (for Testing/Manual Use):**
+If you prefer to run the client manually without installing it as a service, use the following command:
   ```bash
-  python3 c2_client/client.py --name <unique-device-name>
+  python3 c2_client/client.py --name <unique-device-name> --c2-url http://<your-server-ip>:8000
   ```
-- The device will now appear in the GUI control panel on your server machine.
+  Replace `<unique-device-name>` with a name for your device and `<your-server-ip>` with the local IP address of the computer running the C2 server.
+  The device will now appear in the GUI control panel on your server machine.
 
 ## Technology Stack
 
