@@ -153,7 +153,7 @@ Description=Raspyjack C2 Client
 After=network.target
 
 [Service]
-ExecStart={python_executable} {script_path} --name {socket.gethostname()} --c2-url {c2_url}
+ExecStart={python_executable} {script_path}.py --name {socket.gethostname()} --c2-url {c2_url}
 WorkingDirectory={project_root}
 Restart=always
 User=root
