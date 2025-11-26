@@ -143,7 +143,7 @@ def install_service(c2_url: str):
     service_file_path = f"/etc/systemd/system/{service_name}.service"
     
     project_root = "/root/Raspyjack"
-    python_executable = os.path.join(project_root, "venv/bin/python3")
+    python_executable = os.path.join(project_root, "venv/bin/python")
     script_path = os.path.join(project_root, "c2_client/client.py")
 
     # Note: The --name argument will use the device's hostname.
@@ -153,7 +153,7 @@ Description=Raspyjack C2 Client
 After=network.target
 
 [Service]
-ExecStart={python_executable} {script_path}.py --name {socket.gethostname()} --c2-url {c2_url}
+ExecStart={python_executable} {script_path} --name {socket.gethostname()} --c2-url {c2_url}
 WorkingDirectory={project_root}
 Restart=always
 User=root
