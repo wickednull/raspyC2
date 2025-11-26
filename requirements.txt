@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+customtkinter
+sqlalchemy
+pillow
+requests
+python-multipart
+aiofiles
