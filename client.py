@@ -6,6 +6,7 @@ import time
 import subprocess
 import threading
 import io
+import socket
 
 try:
     from PIL import Image
