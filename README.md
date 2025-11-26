@@ -44,8 +44,8 @@ The server consists of the backend API and the GUI control panel.
 **Installation:**
 1.  **Clone the repository:**
     ```bash
-    git clone 
-    cd RaspyjackC2
+    git clone https://github.com/wickednull/raspyC2.git
+    cd raspyC2
     ```
 2.  **Create and activate a virtual environment:**
     ```bash
