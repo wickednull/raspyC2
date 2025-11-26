@@ -130,6 +130,62 @@ def execute_c2_command(command: str):
 
     return f"Unknown C2 command: {cmd_type}"
 
+def install_service():
+    """Creates and enables a systemd service for the client."""
+    print("Attempting to install client as a systemd service...")
+
+    if os.geteuid() != 0:
+        print("Error: Installation requires root privileges. Please run with sudo.")
+        return
+
+    service_name = "raspyjack-client"
+    service_file_path = f"/etc/systemd/system/{service_name}.service"
+    
+    # Assumes the script is run from the project's root directory on the device
+    project_root = "/root/Raspyjack"
+    python_executable = os.path.join(project_root, "venv/bin/python3")
+    script_path = os.path.join(project_root, "c2_client/client.py")
+
+    service_content = f"""[Unit]
+Description=Raspyjack C2 Client
+After=network.target
+
+[Service]
+ExecStart={python_executable} {script_path} --name {socket.gethostname()}
+WorkingDirectory={project_root}
+Restart=always
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+    try:
+        print(f"Writing service file to {service_file_path}...")
+        with open(service_file_path, "w") as f:
+            f.write(service_content)
+
+        print("Reloading systemd daemon...")
+        subprocess.run(["systemctl", "daemon-reload"], check=True)
+
+        print(f"Enabling service '{service_name}' to start on boot...")
+        subprocess.run(["systemctl", "enable", service_name], check=True)
+
+        print(f"Starting service '{service_name}'...")
+        subprocess.run(["systemctl", "start", service_name], check=True)
+
+        print("\nService installation successful!")
+        print(f"Check status with: sudo systemctl status {service_name}")
+        print(f"View logs with: journalctl -u {service_name} -f")
+
+    except (subprocess.CalledProcessError, IOError) as e:
+        print(f"An error occurred during installation: {e}")
+        print("Installation failed.")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
 def submit_result(device_id: str, task_id: int, output: str):
     try:
         payload = {"task_id": task_id, "output": output}
@@ -169,9 +225,14 @@ def main_loop(device_config):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Raspyjack C2 Client")
     parser.add_argument("--name", default="raspy-01", help="A unique name for this device")
+    parser.add_argument("command", nargs="?", help="Optional command, e.g., 'install'")
     args = parser.parse_args()
-    config = get_device_config(args.name)
-    if config:
-        main_loop(config)
+
+    if args.command == "install":
+        install_service()
     else:
-        print("Could not start client.")
+        config = get_device_config(args.name)
+        if config:
+            main_loop(config)
+        else:
+            print("Could not start client.")
