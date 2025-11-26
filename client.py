@@ -143,8 +143,8 @@ def install_service(c2_url: str):
     service_file_path = f"/etc/systemd/system/{service_name}.service"
     
     project_root = "/root/Raspyjack"
-    python_executable = os.path.join(project_root, "venv/bin/python")
-    script_path = os.path.join(project_root, "client.py")
+    python_executable = "/usr/bin/python3" # Use system Python
+    script_path = os.path.join(project_root, "client.py") # Correct script path
 
     # Note: The --name argument will use the device's hostname.
     # The --c2-url will be the one provided during installation.
@@ -236,7 +236,7 @@ if __name__ == "__main__":
         C2_URL = f"{args.c2_url}/api"
     else:
         # Default for non-install commands if not provided
-        C2_URL = "http://127.0.0.1:8000/api"
+        C2_URL = "http://127.0.0.1:8000/api" # This default is only for local testing/direct run
 
     if args.command == "install":
         if not args.c2_url:
