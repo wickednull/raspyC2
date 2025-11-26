@@ -18,7 +18,7 @@ try:
 except ImportError:
     ImageGrab = None
 
-C2_URL = "http://127.0.0.1:8000/api"
+C2_URL = None # Will be set from args
 CONFIG_FILE = "device_config.json"
 
 screencap_thread = None
@@ -31,7 +31,7 @@ def get_device_config(name: str):
         return config
     try:
         payload = {"name": name}
-        response = requests.post(f"{C2_URL}/api/register", json=payload)
+        response = requests.post(f"{C2_URL}/register", json=payload)
         response.raise_for_status()
         config = response.json()
         with open(CONFIG_FILE, 'w') as f: json.dump(config, f, indent=4)
@@ -131,7 +131,7 @@ def execute_c2_command(command: str):
 
     return f"Unknown C2 command: {cmd_type}"
 
-def install_service():
+def install_service(c2_url: str):
     """Creates and enables a systemd service for the client."""
     print("Attempting to install client as a systemd service...")
 
@@ -142,17 +142,18 @@ def install_service():
     service_name = "raspyjack-client"
     service_file_path = f"/etc/systemd/system/{service_name}.service"
     
-    # Assumes the script is run from the project's root directory on the device
     project_root = "/root/Raspyjack"
     python_executable = os.path.join(project_root, "venv/bin/python3")
     script_path = os.path.join(project_root, "c2_client/client.py")
 
+    # Note: The --name argument will use the device's hostname.
+    # The --c2-url will be the one provided during installation.
     service_content = f"""[Unit]
 Description=Raspyjack C2 Client
 After=network.target
 
 [Service]
-ExecStart={python_executable} {script_path} --name {socket.gethostname()}
+ExecStart={python_executable} {script_path} --name {socket.gethostname()} --c2-url {c2_url}
 WorkingDirectory={project_root}
 Restart=always
 User=root
@@ -226,11 +227,23 @@ def main_loop(device_config):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Raspyjack C2 Client")
     parser.add_argument("--name", default="raspy-01", help="A unique name for this device")
+    parser.add_argument("--c2-url", help="URL of the C2 server (e.g., http://192.168.1.10:8000)")
     parser.add_argument("command", nargs="?", help="Optional command, e.g., 'install'")
     args = parser.parse_args()
 
+    # Set the global C2 URL
+    if args.c2_url:
+        C2_URL = f"{args.c2_url}/api"
+    else:
+        # Default for non-install commands if not provided
+        C2_URL = "http://127.0.0.1:8000/api"
+
     if args.command == "install":
-        install_service()
+        if not args.c2_url:
+            print("Error: --c2-url is required for the install command.")
+        else:
+            # Pass the base URL (without /api) to the installer
+            install_service(args.c2_url)
     else:
         config = get_device_config(args.name)
         if config:
