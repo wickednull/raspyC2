@@ -144,7 +144,7 @@ def install_service(c2_url: str):
     
     project_root = "/root/Raspyjack"
     python_executable = os.path.join(project_root, "venv/bin/python")
-    script_path = os.path.join(project_root, "c2_client/client.py")
+    script_path = os.path.join(project_root, "client.py")
 
     # Note: The --name argument will use the device's hostname.
     # The --c2-url will be the one provided during installation.
