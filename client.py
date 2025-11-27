@@ -39,7 +39,8 @@ def _make_request(method: str, endpoint: str, **kwargs):
 def get_device_config(name: str):
     global DEVICE_API_KEY
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r') as f: config = json.load(f)
+        with open(CONFIG_FILE, 'r') as f:
+            config = json.load(f)
         DEVICE_API_KEY = config.get("api_key")
         print(f"Device config loaded. ID: {config.get('id')}")
         return config
@@ -49,7 +50,8 @@ def get_device_config(name: str):
         response.raise_for_status()
         config = response.json()
         DEVICE_API_KEY = config.get("api_key")
-        with open(CONFIG_FILE, 'w') as f: json.dump(config, f, indent=4)
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=4)
         print(f"Device registered successfully! ID: {config.get('id')}")
         return config
     except requests.exceptions.RequestException as e:
@@ -128,7 +130,8 @@ def execute_c2_command(command: str):
         if not path: return "Error: No file path specified for c2_read."
         try:
             if not os.path.isfile(path): return f"Error: '{path}' is not a valid file."
-            with open(path, 'r', errors='ignore') as f: content = f.read(10000)
+            with open(path, 'r', errors='ignore') as f:
+                content = f.read(10000)
             return f"Content of '{os.path.abspath(path)}':\n\n{content}"
         except Exception as e: return f"Error reading file: {e}"
 
@@ -160,7 +163,7 @@ def install_service(c2_url: str):
     
     project_root = "/root/Raspyjack"
     python_executable = "/usr/bin/python3" # Use system Python
-    script_path = os.path.join(project_root, "client_fixed.py") # Correct script path
+    script_path = os.path.join(project_root, "client.py") # Correct script path
 
     # Note: The --name argument will use the device's hostname.
     # The --c2-url will be the one provided during installation.
