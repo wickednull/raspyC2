@@ -25,7 +25,7 @@ The system consists of three main components that work together:
 | (on Raspyjack)  |----->| (FastAPI + SQLite)   |<-----|   (CustomTkinter)  |
 +-----------------+      +----------------------+      +--------------------+
        |                                                       ^
-       | polls for commands, sends results                     | issues commands,
+       |       polls for commands, sends results                     | issues commands,
        |                                                       | views results
        +-------------------------------------------------------+
 ```
