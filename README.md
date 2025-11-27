@@ -1,4 +1,5 @@
 # Raspyjack C2 - Command & Control Center
+![image](https://github.com/user-attachments/assets/a0292a5b-6f37-4a42-abcc-c0a978f1ce6c)
 
 ![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
