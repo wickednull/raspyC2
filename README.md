@@ -65,28 +65,6 @@ The entire application (backend API and GUI) can be started with a single comman
   ```
 This will launch the FastAPI backend in a separate process and then open the GUI control panel. When you close the GUI, the backend server will automatically shut down.
 
-**Important Database Note (`c2.db`):**
-The C2 server uses an SQLite database file named `c2.db` (located in the `RaspyjackC2` project root) to store all device registrations, tasks, and results.
-
-*   **Deleting `c2.db`:** If you delete this file, all registered devices and their associated data will be lost. The server will automatically recreate an empty `c2.db` with fresh tables upon its next startup.
-*   **Device Re-registration:** If `c2.db` is deleted or replaced, any previously registered clients will no longer be recognized by the server. You will need to force these clients to re-register. To do this, delete the `device_config.json` file on the client device (e.g., `/root/Raspyjack/device_config.json`) and then restart the client. The client will then automatically register as a new device.
-
-**Debugging Server Issues:**
-If you encounter server-side errors (e.g., `500 Internal Server Error` during client registration), it's often helpful to run the server in the foreground to see detailed error messages.
-
-1.  **Stop any running background server process:**
-    ```bash
-    # Find the PID of the uvicorn/python3 process listening on port 8000
-    lsof -i :8000
-    # Kill the process (replace <PID> with the actual PID)
-    kill <PID>
-    ```
-2.  **Start the application in the foreground:**
-    ```bash
-    python raspyC2.py
-    ```
-    This will display all server logs and errors directly in your terminal. Once debugging is complete, you can stop it with `Ctrl+C` and restart it in the background if desired.
-
 ### 2. Client Setup (on the Raspyjack)
 
 Deploy the client to your Raspyjack device.
