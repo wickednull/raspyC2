@@ -1,8 +1,6 @@
 import datetime
 import uuid
-import secrets # Import secrets module
-from fastapi import FastAPI, Depends, Request, HTTPException, status
-from fastapi.security import APIKeyHeader # For API Key authentication
+from fastapi import FastAPI, Depends, Request, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -21,7 +19,6 @@ class DeviceCreate(DeviceBase):
 
 class DeviceSchema(DeviceBase):
     id: str
-    api_key: str # Include api_key in the schema
     registered_at: datetime.datetime
     last_seen: datetime.datetime
 
@@ -75,28 +72,14 @@ def get_db():
     finally:
         db.close()
 
-# API Key authentication
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
-
-async def authenticate_device(api_key: str = Depends(api_key_header), db: Session = Depends(get_db)):
-    device = db.query(models.Device).filter(models.Device.api_key == api_key).first()
-    if not device:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API Key",
-            headers={"WWW-Authenticate": "X-API-Key"},
-        )
-    return device
-
 # --- API Endpoints ---
 
 @app.post("/api/register", response_model=DeviceSchema)
 def register_device(device: DeviceCreate, request: Request, db: Session = Depends(get_db)):
     client_ip = request.client.host
     new_id = str(uuid.uuid4())
-    new_api_key = secrets.token_urlsafe(32) # Generate a secure API key
     db_device = models.Device(
-        id=new_id, name=device.name, ip_address=client_ip, api_key=new_api_key,
+        id=new_id, name=device.name, ip_address=client_ip,
         registered_at=datetime.datetime.utcnow(), last_seen=datetime.datetime.utcnow()
     )
     db.add(db_device)
@@ -136,14 +119,18 @@ def create_task(task: TaskCreate, db: Session = Depends(get_db)):
     db.refresh(db_task)
     return db_task
 
-@app.get("/api/commands", response_model=List[TaskSchema])
-def get_commands(device: models.Device = Depends(authenticate_device), db: Session = Depends(get_db)):
+@app.get("/api/commands/{device_id}", response_model=List[TaskSchema])
+def get_commands(device_id: str, db: Session = Depends(get_db)):
     """Get pending commands for a device."""
+    device = db.query(models.Device).filter(models.Device.id == device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
     # Update last_seen timestamp as a heartbeat
     device.last_seen = datetime.datetime.utcnow()
     
     tasks = db.query(models.Task).filter(
-        models.Task.device_id == device.id,
+        models.Task.device_id == device_id,
         models.Task.status == "pending"
     ).order_by(models.Task.created_at).all()
     
@@ -154,17 +141,17 @@ def get_commands(device: models.Device = Depends(authenticate_device), db: Sessi
     db.commit()
     return tasks
 
-@app.post("/api/results", response_model=ResultSchema)
-def submit_result(result: ResultCreate, device: models.Device = Depends(authenticate_device), db: Session = Depends(get_db)):
+@app.post("/api/results/{device_id}", response_model=ResultSchema)
+def submit_result(device_id: str, result: ResultCreate, db: Session = Depends(get_db)):
     """Submit results for a completed task."""
     task = db.query(models.Task).filter(models.Task.id == result.task_id).first()
-    if not task or task.device_id != device.id:
+    if not task or task.device_id != device_id:
         raise HTTPException(status_code=404, detail="Task not found or does not belong to this device")
 
     task.status = "completed"
     
     db_result = models.Result(
-        device_id=device.id,
+        device_id=device_id,
         task_id=result.task_id,
         output=result.output
     )
@@ -189,12 +176,12 @@ import io
 # In-memory store for the latest screen frames
 latest_screens = {}
 
-@app.post("/api/screen", response_model=dict)
-async def receive_screen_frame(body: bytes = Body(...), device: models.Device = Depends(authenticate_device)):
+@app.post("/api/screen/{device_id}")
+async def receive_screen_frame(device_id: str, body: bytes = Body(...)):
     """Receives a screen frame from a device."""
     if not body:
         raise HTTPException(status_code=400, detail="Empty body")
-    latest_screens[device.id] = body
+    latest_screens[device_id] = body
     return {"status": "received"}
 
 @app.get("/api/screen/{device_id}")

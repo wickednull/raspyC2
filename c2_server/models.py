@@ -9,7 +9,6 @@ class Device(Base):
     id = Column(String, primary_key=True, index=True)
     name = Column(String, index=True)
     ip_address = Column(String)
-    api_key = Column(String, unique=True, index=True) # New API Key field
     registered_at = Column(DateTime, default=datetime.datetime.utcnow)
     last_seen = Column(DateTime, default=datetime.datetime.utcnow)
 

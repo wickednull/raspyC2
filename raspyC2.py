@@ -17,14 +17,7 @@ def run_server(project_path):
     """Runs the FastAPI server in a quiet mode."""
     # Add the project path to the new process's sys.path as well
     sys.path.insert(0, project_path)
-    uvicorn.run(
-        "c2_server.main:app",
-        host="0.0.0.0",
-        port=8000,
-        log_level="warning",
-        ssl_keyfile=os.path.join(project_path, "c2_server", "key.pem"),
-        ssl_certfile=os.path.join(project_path, "c2_server", "cert.pem")
-    )
+    uvicorn.run("c2_server.main:app", host="0.0.0.0", port=8000, log_level="warning")
 
 if __name__ == "__main__":
     # Set start method for multiprocessing (important for PyInstaller)
