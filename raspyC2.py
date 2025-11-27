@@ -3,6 +3,8 @@ import uvicorn
 import time
 import sys
 import os
+import logging
+from logging.handlers import RotatingFileHandler
 
 # --- Path Fix ---
 # Get the absolute path of the project root directory
@@ -14,17 +16,33 @@ from c2_server.main import app as fastapi_app
 from gui.main_app import App
 
 def run_server(project_path):
-    """Runs the FastAPI server in a quiet mode."""
+    """Runs the FastAPI server and redirects its logs to a file."""
     # Add the project path to the new process's sys.path as well
     sys.path.insert(0, project_path)
-    uvicorn.run("c2_server.main:app", host="0.0.0.0", port=8000, log_level="warning")
+
+    log_file_path = os.path.join(PROJECT_ROOT, "server_debug.log")
+    
+    # Configure basic logging to file for the root logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            RotatingFileHandler(
+                log_file_path,
+                maxBytes=10 * 1024 * 1024, # 10 MB
+                backupCount=5
+            )
+        ]
+    )
+
+    uvicorn.run("c2_server.main:app", host="0.0.0.0", port=8000, log_level="debug")
 
 if __name__ == "__main__":
     # Set start method for multiprocessing (important for PyInstaller)
     multiprocessing.set_start_method('spawn', force=True)
 
     # Start the FastAPI server in a separate, daemonic process
-    print("Starting backend server...")
+    print("Starting backend server (logs to server_debug.log)...")
     server_process = multiprocessing.Process(target=run_server, args=(PROJECT_ROOT,))
     server_process.daemon = True
     server_process.start()

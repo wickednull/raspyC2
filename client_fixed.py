@@ -7,7 +7,6 @@ import subprocess
 import threading
 import io
 import socket
-import base64
 
 try:
     from PIL import Image
@@ -25,16 +24,31 @@ CONFIG_FILE = "device_config.json"
 screencap_thread = None
 screencap_stop_event = threading.Event()
 
+# Global variable to store the API key
+DEVICE_API_KEY = None
+
+def _make_request(method: str, endpoint: str, **kwargs):
+    """Helper to make authenticated requests to the C2 server."""
+    headers = kwargs.pop("headers", {})
+    if DEVICE_API_KEY:
+        headers["X-API-Key"] = DEVICE_API_KEY
+    
+    # SSL verification is not needed for HTTP
+    return requests.request(method, f"{C2_URL}{endpoint}", headers=headers, **kwargs)
+
 def get_device_config(name: str):
+    global DEVICE_API_KEY
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f: config = json.load(f)
+        DEVICE_API_KEY = config.get("api_key")
         print(f"Device config loaded. ID: {config.get('id')}")
         return config
     try:
         payload = {"name": name}
-        response = requests.post(f"{C2_URL}/register", json=payload)
+        response = _make_request("POST", "/register", json=payload)
         response.raise_for_status()
         config = response.json()
+        DEVICE_API_KEY = config.get("api_key")
         with open(CONFIG_FILE, 'w') as f: json.dump(config, f, indent=4)
         print(f"Device registered successfully! ID: {config.get('id')}")
         return config
@@ -53,8 +67,9 @@ def screencap_worker(device_id):
             img_byte_arr = io.BytesIO()
             image.save(img_byte_arr, format='JPEG')
             
-            requests.post(
-                f"{C2_URL}/screen/{device_id}",
+            _make_request(
+                "POST",
+                f"/screen/{device_id}",
                 data=img_byte_arr.getvalue(),
                 headers={'Content-Type': 'image/jpeg'},
                 timeout=2
@@ -130,38 +145,6 @@ def execute_c2_command(command: str):
         except Exception as e:
             return f"Error gathering device details: {e}"
 
-    elif cmd_type == "c2_download":
-        path = parts[1] if len(parts) > 1 else None
-        if not path: return "Error: No file path specified for c2_download."
-        try:
-            if not os.path.isfile(path): return f"Error: '{path}' is not a valid file."
-            with open(path, 'rb') as f:
-                file_content = f.read()
-            encoded_content = base64.b64encode(file_content).decode('utf-8')
-            return json.dumps({"file_path": path, "content": encoded_content})
-        except Exception as e: return f"Error downloading file: {e}"
-
-    elif cmd_type == "c2_upload":
-        if len(parts) < 2: return "Error: No file path and content specified for c2_upload."
-        try:
-            # Command format: c2_upload <path> <base64_content>
-            # We need to split only once to get path and then the rest as content
-            path_and_content = parts[1].split(" ", 1)
-            if len(path_and_content) < 2: return "Error: Invalid format for c2_upload. Expected 'c2_upload <path> <base64_content>'."
-            
-            path = path_and_content[0]
-            encoded_content = path_and_content[1]
-
-            decoded_content = base64.b64decode(encoded_content)
-            
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-
-            with open(path, 'wb') as f:
-                f.write(decoded_content)
-            return f"Successfully uploaded file to {path}"
-        except Exception as e: return f"Error uploading file: {e}"
-
     return f"Unknown C2 command: {cmd_type}"
 
 def install_service(c2_url: str):
@@ -177,7 +160,7 @@ def install_service(c2_url: str):
     
     project_root = "/root/Raspyjack"
     python_executable = "/usr/bin/python3" # Use system Python
-    script_path = os.path.join(project_root, "client.py") # Correct script path
+    script_path = os.path.join(project_root, "client_fixed.py") # Correct script path
 
     # Note: The --name argument will use the device's hostname.
     # The --c2-url will be the one provided during installation.
@@ -224,8 +207,7 @@ WantedBy=multi-user.target
 def submit_result(device_id: str, task_id: int, output: str):
     try:
         payload = {"task_id": task_id, "output": output}
-        response = requests.post(f"{C2_URL}/results/{device_id}", json=payload)
-        response.raise_for_status()
+        _make_request("POST", f"/results/{device_id}", json=payload)
     except requests.RequestException as e:
         print(f"Error submitting result: {e}")
 
@@ -236,7 +218,7 @@ def main_loop(device_config):
     print(f"Starting C2 client for device {device_id}. Polling for commands...")
     while True:
         try:
-            tasks = requests.get(f"{C2_URL}/commands/{device_id}").json()
+            tasks = _make_request("GET", f"/commands/{device_id}").json()
             if tasks:
                 for task in tasks:
                     task_id, command = task.get("id"), task.get("command")
@@ -268,8 +250,13 @@ if __name__ == "__main__":
     if args.c2_url:
         C2_URL = f"{args.c2_url}/api"
     else:
-        # Default for non-install commands if not provided
-        C2_URL = "http://127.0.0.1:8000/api" # This default is only for local testing/direct run
+        # If --c2-url is not provided, it's a critical error for non-install commands
+        if args.command != "install":
+            print("Error: --c2-url is required to run the client.")
+            import sys
+            sys.exit(1)
+        # For install command, c2-url is checked separately
+        C2_URL = None # Ensure it's explicitly not set if not provided
 
     if args.command == "install":
         if not args.c2_url:
@@ -277,7 +264,11 @@ if __name__ == "__main__":
         else:
             # Pass the base URL (without /api) to the installer
             install_service(args.c2_url)
-    else:
+    else: # Not an install command
+        if not C2_URL: # Check if C2_URL was set by argparse
+            print("Error: C2 URL not configured. Please provide --c2-url or run 'install'.")
+            import sys
+            sys.exit(1)
         config = get_device_config(args.name)
         if config:
             main_loop(config)

