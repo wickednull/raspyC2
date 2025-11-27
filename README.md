@@ -94,7 +94,7 @@ Deploy the client to your Raspyjack device.
 **Prerequisites:**
 - Python 3
 - `pip` for Python 3
-- `requests` library (and optionally `Pillow` and `pyscreenshot` for screen capture functionality)
+- `requests` library (and optionally `Pillow` and `pyscreenshot` for screen capture functionality when implemented)
 
 **Installation:**
 1.  **Transfer the entire `RaspyjackC2` project directory** to your Raspyjack. For the systemd service to function correctly, it is recommended to place it in `/root/Raspyjack`.
