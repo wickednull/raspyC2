@@ -3,7 +3,7 @@ import requests
 from PIL import Image
 import io
 
-C2_API_URL = "http://127.0.0.1:8000/api"
+C2_API_URL = "https://127.0.0.1:8000/api"
 
 class ScreenMirrorWindow(customtkinter.CTkToplevel):
     def __init__(self, master, device_id):
@@ -22,7 +22,7 @@ class ScreenMirrorWindow(customtkinter.CTkToplevel):
 
     def fetch_frame(self):
         try:
-            response = requests.get(f"{C2_API_URL}/screen/{self.device_id}", timeout=2)
+            response = requests.get(f"{C2_API_URL}/screen/{self.device_id}", timeout=2, verify=False)
             if response.status_code == 200:
                 pil_image = Image.open(io.BytesIO(response.content))
                 ctk_image = customtkinter.CTkImage(light_image=pil_image, dark_image=pil_image, size=pil_image.size)
